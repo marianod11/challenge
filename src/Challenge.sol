@@ -1,161 +1,204 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "./PolicyNFT.sol";
+import {IPool} from "./interfaces/IPool.sol";
+import {IPoolAddressesProvider} from "./interfaces/IPoolAddressesProvider.sol";
+import {IUiPoolDataProviderV3} from "./interfaces/IUiPoolDataProviderV3.sol";
 
-contract Challenge is ERC721Enumerable, Ownable {
+contract Challenge is Ownable {
+    using SafeMath for uint256;
 
     IERC20 public usdcToken;
 
     uint256 public insuranceFee;
-    uint256 public claimFee;
+    uint256 public percentageFee = 200;
+    uint256 public pricePolicy;
 
     address public oracle;
+    address public tresury;
 
-    ILendingPoolAddressesProvider public provider;
-    ILendingPool public lendingPool;
+    PolicyNFT public policyNFTContract;
+
+    IPoolAddressesProvider public immutable ADDRESSES_PROVIDER;
+    IPool public immutable POOL;
+    IUiPoolDataProviderV3 public immutable POOLDATAUSER;
 
     struct NFTMetaData {
-        uint256 sizeOfLent;
-        uint256 sizeOfBorrow;
+        uint256 totalLent;
+        uint256 totalBorrowed;
+        uint256 borrowingLimit;
+        uint256 health;
         uint256 totalInsured;
-        address tokenAddress;
+        address owner;
     }
 
     mapping(uint256 => NFTMetaData) public nftData;
+    mapping(address => uint) public idOwner;
+    mapping(address => bool) private isSecured;
 
-    event InsurancePurchased(
-        address indexed owner,
-        uint256 tokenId,
-        uint256 loanPositionId,
-        uint256 premiumAmount
-    );
-    event ClaimedInsurance(
-        address indexed owner,
-        uint256 tokenId,
-        uint256 insuredAmount
-    );
+    event Attest(address indexed to, uint256 indexed tokenId);
+    event Revoke(address indexed to, uint256 indexed tokenId);
 
     constructor(
-        string memory _name,
-        string memory _symbol,
         address _usdcToken,
+        //   address _oracle,
+        address _addressProvider,
+        address _IUiPoolDataProviderV3,
+        address _tresury,
+        address _policyNFTContract,
         uint256 _insuranceFee,
-        uint256 _claimFee,
-        address _oracle
-        address _providerAddress
-    ) ERC721(_name, _symbol) {
+        uint256 _pricePolicy
+    ) {
         usdcToken = IERC20(_usdcToken);
+        //   oracle = _oracle;
+        ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressProvider);
+        POOL = IPool(ADDRESSES_PROVIDER.getPool());
+        POOLDATAUSER = IUiPoolDataProviderV3(_IUiPoolDataProviderV3);
+        policyNFTContract = PolicyNFT(_policyNFTContract);
         insuranceFee = _insuranceFee;
-        claimFee = _claimFee;
-        oracle = _oracle;
-        provider = ILendingPoolAddressesProvider(_providerAddress);
-        lendingPool = ILendingPool(provider.getLendingPool());
+        tresury = _tresury;
+        pricePolicy = _pricePolicy;
     }
 
+    function allUserPositions()
+        external
+        view
+        returns (IUiPoolDataProviderV3.UserReserveData[] memory)
+    {
+        (
+            IUiPoolDataProviderV3.UserReserveData[] memory userData,
 
-    function getUserPositions(address _user) external view returns (uint256[] memory) {
-        address[] memory assets = lendingPool.getReservesList();
-        uint256[] memory userPositions = new uint256[](assets.length);
-
-        for (uint256 i = 0; i < assets.length; i++) {
-            // Obtener el saldo depositado
-            (uint256 userDepositBalance, , ) = lendingPool.getUserReserveData(assets[i], _user);
-            userPositions[i] = userDepositBalance;
-        }
-
-        return userPositions;
+        ) = POOLDATAUSER.getUserReservesData(ADDRESSES_PROVIDER, msg.sender);
+        return userData;
     }
 
+    function _getUserData()
+        internal
+        view
+        returns (
+            uint256 totalCollateralBase,
+            uint256 totalDebtBase,
+            uint256 availableBorrowsBase,
+            uint256 currentLiquidationThreshold,
+            uint256 ltv,
+            uint256 healthFactor
+        )
+    {
+        return POOL.getUserAccountData(msg.sender);
+    }
 
+    function getUserData()
+        external
+        view
+        returns (
+            uint256 totalCollateralBase,
+            uint256 totalDebtBase,
+            uint256 availableBorrowsBase,
+            uint256 currentLiquidationThreshold,
+            uint256 ltv,
+            uint256 healthFactor
+        )
+    {
+        return POOL.getUserAccountData(msg.sender);
+    }
 
+    function _getHealthFactor() internal view returns (uint256) {
+        (
+            uint256 totalCollateralBase,
+            uint256 totalDebtBase,
+            ,
+            uint256 currentLiquidationThreshold,
+            ,
 
+        ) = _getUserData();
 
+        uint256 HF = (totalCollateralBase.mul(currentLiquidationThreshold)).div(
+            10000
+        );
 
+        return HF.div(1e18);
+    }
 
+    function buyInsurance() external {
+        (
+            uint256 totalCollateralBase,
+            uint256 totalDebtBase,
+            uint256 availableBorrowsBase,
+            ,
+            ,
 
+        ) = _getUserData();
 
-    function buyInsurance(uint256 _loanPositionId) external {
-        // Verifica que la posición de préstamo sea válida y que el usuario pague la tarifa de seguro
+        // require(totalDebtBase > 0, "Not borrow");
 
-        // Transfiere tokens USDC como prima de seguro al contrato
+        uint healthFactor = _getHealthFactor();
 
-        // Crea un nuevo NFT como póliza de seguro
-        uint256 tokenId = totalSupply() + 1;
-        _mint(msg.sender, tokenId);
+        require(!isSecured[msg.sender], "You are already insured");
+        //require(healthFactor > 1, "Position to liquidate");
 
-        //consulta al oraculo
+        uint256 totalInsured = (totalCollateralBase.div(100)).div(2);
 
-        // Asigna los detalles del seguro al NFT
+        // Transfer policy payment and fee
+
+        usdcToken.transferFrom(msg.sender, address(this), pricePolicy);
+        usdcToken.transferFrom(msg.sender, tresury, insuranceFee);
+
+        // Mint PolicyNft
+        uint256 tokenId = policyNFTContract.safeMint(msg.sender);
+
+        idOwner[msg.sender] = tokenId;
+        isSecured[msg.sender] = true;
+
+        // Assign insurance details to the NFT
         nftData[tokenId] = NFTMetaData({
-            loanPositionId: _loanPositionId,
-            sizeOfBorrow: 0,
-            isLiquidated: false
+            totalLent: totalCollateralBase,
+            totalBorrowed: totalDebtBase,
+            borrowingLimit: availableBorrowsBase,
+            health: healthFactor,
+            totalInsured: totalInsured,
+            owner: msg.sender
         });
-
-        emit InsurancePurchased(
-            msg.sender,
-            tokenId,
-            _loanPositionId,
-            insuranceFee
-        );
     }
 
-    // Función para consultar la posición del usuario en el protocolo
-    function getPositionDetails(
-        uint256 _tokenId /* Detalles de la posición */
-    ) external view returns () {
-        // Implementa la lógica para consultar la posición en el protocolo
+    // Function to claim insurance if the position is liquidated
+
+    function claimInsurance() external {
+        // como saber si el usuario esta liquidado
+
+        uint idToken = idOwner[msg.sender];
+
+        policyNFTContract.burn(idToken, msg.sender);
+        NFTMetaData memory dataNft = nftData[idToken];
+        uint256 total = dataNft.totalInsured;
+        uint256 percentage2 = (total.mul(percentageFee)).div(10000);
+        uint256 percentage98 = total - percentage2;
+
+        usdcToken.approve(address(this), total);
+        usdcToken.transferFrom(address(this), msg.sender, percentage98);
+
+        usdcToken.transferFrom(address(this), tresury, percentage2);
+        isSecured[msg.sender] = false;
+
+        delete nftData[idToken];
+        delete idOwner[msg.sender];
     }
 
-    // Función para reclamar seguro si la posición es liquidada
-    function claimInsurance(uint256 _tokenId) external {
-        // Verifica si la posición está liquidada y que el usuario pague la tarifa de reclamación
+    //function para ver la data del nft
 
-        // Transfiere tokens USDC como pago de reclamación al usuario
+    function getDataNft() external view returns (NFTMetaData memory) {
+        uint idToken = idOwner[msg.sender];
+        NFTMetaData memory dataNft = nftData[idToken];
 
-        // Quema el NFT
-        _burn(_tokenId);
-
-        emit ClaimedInsurance(
-            msg.sender,
-            _tokenId,
-            nftDetails[_tokenId].insuredAmount
-        );
-    }
-
-    // Función para actualizar los detalles del seguro en el NFT
-    function _updateInsuranceDetails(
-        uint256 _tokenId,
-        uint256 _insuredAmount,
-        bool _isLiquidated
-    ) internal {
-        // Actualiza los detalles del seguro en el NFT
-        nftDetails[_tokenId].insuredAmount = _insuredAmount;
-        nftDetails[_tokenId].isLiquidated = _isLiquidated;
+        return dataNft;
     }
 
     // Función para cambiar la tarifa de seguro
     function setInsuranceFee(uint256 _newFee) external onlyOwner {
         insuranceFee = _newFee;
-    }
-
-    // Función para cambiar la tarifa de reclamación
-    function setClaimFee(uint256 _newFee) external onlyOwner {
-        claimFee = _newFee;
-    }
-
-    // Función para cambiar la dirección del contrato de oráculo
-    function setoracle(address _newOracle) external onlyOwner {
-        oracle = _newOracle;
-    }
-
-    // Función para consultar el estado de salud de la posición utilizando el contrato de oráculo
-    function checkPositionHealth(
-        uint256 _loanPositionId
-    ) internal view returns (bool) {
-        // Implementa la lógica para verificar el estado de salud de la posición
     }
 }
