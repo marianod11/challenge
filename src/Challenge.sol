@@ -18,7 +18,7 @@ contract Challenge is Ownable {
     uint256 public insuranceFee;
     uint256 public claimFee = 200;
 
-    address public tresury;
+    address public treasury;
     address public governor;
 
     PolicyNFT public policyNFTContract;
@@ -64,7 +64,7 @@ contract Challenge is Ownable {
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressProvider);
         POOL = IPool(ADDRESSES_PROVIDER.getPool());
         POOLDATAUSER = IUiPoolDataProviderV3(_IUiPoolDataProviderV3);
-        tresury = _tresury;
+        treasury = _treasury;
         policyNFTContract = PolicyNFT(_policyNFTContract);
         insuranceFee = _insuranceFee;
        
@@ -160,7 +160,7 @@ contract Challenge is Ownable {
         uint256 pricePolicy = (totalCollateralBase.div(100)).div(4);
 
         usdcToken.transferFrom(_user, address(this), pricePolicy);
-        usdcToken.transferFrom(_user, tresury, insuranceFee);
+        usdcToken.transferFrom(_user, treasury, insuranceFee);
 
         uint256 tokenId = policyNFTContract.safeMint(_user);
 
@@ -210,7 +210,7 @@ contract Challenge is Ownable {
         usdcToken.approve(address(this), total);
         usdcToken.transferFrom(address(this), _user, percentage98);
 
-        usdcToken.transferFrom(address(this), tresury, percentage2);
+        usdcToken.transferFrom(address(this), treasury, percentage2);
         isSecured[_user] = false;
 
         delete nftData[idToken];
