@@ -7,7 +7,7 @@ import {Challenge} from "../src/Challenge.sol";
 import {USDCToken} from "../src/USDCToken.sol";
 import {PolicyNFT} from "../src/PolicyNFT.sol";
 
-contract Script is Script {
+contract ScriptChallenge is Script {
     function setUp() public {}
 
     function run() public {
