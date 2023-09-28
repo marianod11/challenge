@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "./PolicyNFT.sol";
+import {PolicyNFT} from "./PolicyNFT.sol";
 import {IPool} from "./interfaces/IPool.sol";
 import {IPoolAddressesProvider} from "./interfaces/IPoolAddressesProvider.sol";
 import {IUiPoolDataProviderV3} from "./interfaces/IUiPoolDataProviderV3.sol";
@@ -16,11 +16,10 @@ contract Challenge is Ownable {
     IERC20 public usdcToken;
 
     uint256 public insuranceFee;
-    uint256 public percentageFee = 200;
-    uint256 public pricePolicy;
+    uint256 public claimFee = 200;
 
-    address public oracle;
     address public tresury;
+    address public governor;
 
     PolicyNFT public policyNFTContract;
 
@@ -29,7 +28,7 @@ contract Challenge is Ownable {
     IUiPoolDataProviderV3 public immutable POOLDATAUSER;
 
     struct NFTMetaData {
-        uint256 totalLent;
+        uint256 totalCollateral;
         uint256 totalBorrowed;
         uint256 borrowingLimit;
         uint256 health;
@@ -44,40 +43,61 @@ contract Challenge is Ownable {
     event Attest(address indexed to, uint256 indexed tokenId);
     event Revoke(address indexed to, uint256 indexed tokenId);
 
+    /**
+     * @dev Constructor del contrato Challenge
+     * @param _usdcToken Dirección del contrato del token USDC
+     * @param _addressProvider Dirección del proveedor de direcciones del mercado
+     * @param _IUiPoolDataProviderV3 Dirección del contrato de datos del usuario del pool
+     * @param _tresury Dirección de la tesorería
+     * @param _policyNFTContract Dirección del contrato de tokens no fungibles de pólizas
+     * @param _insuranceFee Tarifa de seguro inicial
+     */
     constructor(
         address _usdcToken,
-        //   address _oracle,
         address _addressProvider,
         address _IUiPoolDataProviderV3,
         address _tresury,
         address _policyNFTContract,
-        uint256 _insuranceFee,
-        uint256 _pricePolicy
+        uint256 _insuranceFee //   address _governor,
     ) {
         usdcToken = IERC20(_usdcToken);
-        //   oracle = _oracle;
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressProvider);
         POOL = IPool(ADDRESSES_PROVIDER.getPool());
         POOLDATAUSER = IUiPoolDataProviderV3(_IUiPoolDataProviderV3);
+        tresury = _tresury;
         policyNFTContract = PolicyNFT(_policyNFTContract);
         insuranceFee = _insuranceFee;
-        tresury = _tresury;
-        pricePolicy = _pricePolicy;
+        // governor = _governor;
     }
 
-    function allUserPositions()
-        external
-        view
-        returns (IUiPoolDataProviderV3.UserReserveData[] memory)
-    {
+    /**
+     * @dev Devuelve la información de todas las posiciones del usuario .
+     * @param _user La dirección del usuarios.
+     * @return UserReserveData.
+     */
+    function allUserPositions(
+        address _user
+    ) external view returns (IUiPoolDataProviderV3.UserReserveData[] memory) {
         (
             IUiPoolDataProviderV3.UserReserveData[] memory userData,
 
-        ) = POOLDATAUSER.getUserReservesData(ADDRESSES_PROVIDER, msg.sender);
+        ) = POOLDATAUSER.getUserReservesData(ADDRESSES_PROVIDER, _user);
         return userData;
     }
 
-    function _getUserData()
+    /**
+    * @dev Obtiene los datos de estado de las reservas del usuario.
+    * @param _user La dirección del usuario .
+    * @return totalCollateralBase Total de colateral depositado por el usuario.
+    * @return totalDebtBase Total de deuda del usuario.
+    * @return availableBorrowsBase Límite de préstamo disponible para el usuario.
+    * @return currentLiquidationThreshold Umbral actual de liquidación del usuario.
+    * @return ltv Relación préstamo-valor (LTV) del usuario.
+    * @return healthFactor Factor de salud financiera del usuario.
+    */
+    function _getUserData(
+        address _user
+    )
         internal
         view
         returns (
@@ -89,25 +109,15 @@ contract Challenge is Ownable {
             uint256 healthFactor
         )
     {
-        return POOL.getUserAccountData(msg.sender);
+        return POOL.getUserAccountData(_user);
     }
 
-    function getUserData()
-        external
-        view
-        returns (
-            uint256 totalCollateralBase,
-            uint256 totalDebtBase,
-            uint256 availableBorrowsBase,
-            uint256 currentLiquidationThreshold,
-            uint256 ltv,
-            uint256 healthFactor
-        )
-    {
-        return POOL.getUserAccountData(msg.sender);
-    }
-
-    function _getHealthFactor() internal view returns (uint256) {
+    /**
+     * @dev Obtiene el Health Factor de un usuario.
+     * @param _user La dirección del usuario .
+     * @return El Health Factor del usuario.
+     */
+    function _getHealthFactor(address _user) internal view returns (uint256) {
         (
             uint256 totalCollateralBase,
             uint256 totalDebtBase,
@@ -115,16 +125,19 @@ contract Challenge is Ownable {
             uint256 currentLiquidationThreshold,
             ,
 
-        ) = _getUserData();
+        ) = _getUserData(_user);
 
-        uint256 HF = (totalCollateralBase.mul(currentLiquidationThreshold)).div(
-            10000
-        );
+        uint256 HF = (totalCollateralBase * currentLiquidationThreshold) /
+            totalDebtBase;
 
         return HF.div(1e18);
     }
 
-    function buyInsurance() external {
+    /**
+     * @dev Permite a un usuario comprar una póliza .
+     * @param _user La dirección del usuario.
+     */
+    function buyInsurance(address _user) external {
         (
             uint256 totalCollateralBase,
             uint256 totalDebtBase,
@@ -132,72 +145,82 @@ contract Challenge is Ownable {
             ,
             ,
 
-        ) = _getUserData();
+        ) = _getUserData(_user);
 
-        // require(totalDebtBase > 0, "Not borrow");
+        require(totalDebtBase > 0, "You haven't borrowed");
 
-        uint healthFactor = _getHealthFactor();
+        uint healthFactor = _getHealthFactor(_user);
 
-        require(!isSecured[msg.sender], "You are already insured");
-        //require(healthFactor > 1, "Position to liquidate");
+        require(!isSecured[_user], "You are already insured");
+        require(healthFactor > 1, "Position to liquidate");
 
         uint256 totalInsured = (totalCollateralBase.div(100)).div(2);
 
-        // Transfer policy payment and fee
+        uint256 pricePolicy = (totalCollateralBase.div(100)).div(4);
 
-        usdcToken.transferFrom(msg.sender, address(this), pricePolicy);
-        usdcToken.transferFrom(msg.sender, tresury, insuranceFee);
+        usdcToken.transferFrom(_user, address(this), pricePolicy);
+        usdcToken.transferFrom(_user, tresury, insuranceFee);
 
-        // Mint PolicyNft
-        uint256 tokenId = policyNFTContract.safeMint(msg.sender);
+        uint256 tokenId = policyNFTContract.safeMint(_user);
 
-        idOwner[msg.sender] = tokenId;
-        isSecured[msg.sender] = true;
+        idOwner[_user] = tokenId;
+        isSecured[_user] = true;
 
-        // Assign insurance details to the NFT
+  
         nftData[tokenId] = NFTMetaData({
-            totalLent: totalCollateralBase,
+            totalCollateral: totalCollateralBase,
             totalBorrowed: totalDebtBase,
             borrowingLimit: availableBorrowsBase,
             health: healthFactor,
             totalInsured: totalInsured,
-            owner: msg.sender
+            owner: _user
         });
     }
 
-    // Function to claim insurance if the position is liquidated
-
-    function claimInsurance() external {
+    /**
+     * @dev Permite a un usuario reclamar el pago de la póliza de seguro si su posición se liquida.
+     * @param _user La dirección del usuario .
+     */
+    function claimInsurance(address _user) external {
         // como saber si el usuario esta liquidado
 
-        uint idToken = idOwner[msg.sender];
+        uint idToken = idOwner[_user];
 
-        policyNFTContract.burn(idToken, msg.sender);
+        policyNFTContract.burn(idToken, _user);
         NFTMetaData memory dataNft = nftData[idToken];
         uint256 total = dataNft.totalInsured;
-        uint256 percentage2 = (total.mul(percentageFee)).div(10000);
+        uint256 percentage2 = (total.mul(claimFee)).div(10000);
         uint256 percentage98 = total - percentage2;
 
         usdcToken.approve(address(this), total);
-        usdcToken.transferFrom(address(this), msg.sender, percentage98);
+        usdcToken.transferFrom(address(this), _user, percentage98);
 
         usdcToken.transferFrom(address(this), tresury, percentage2);
-        isSecured[msg.sender] = false;
+        isSecured[_user] = false;
 
         delete nftData[idToken];
-        delete idOwner[msg.sender];
+        delete idOwner[_user];
     }
 
-    //function para ver la data del nft
-
-    function getDataNft() external view returns (NFTMetaData memory) {
-        uint idToken = idOwner[msg.sender];
+    /**
+     * @dev Obtiene los datos de una póliza de seguro asociada a un usuario.
+     * @param _user La dirección del usuario para consultar los datos de su póliza.
+     * @return  NFTMetaData.
+     */
+    function getDataNft(
+        address _user
+    ) external view returns (NFTMetaData memory) {
+        uint idToken = idOwner[_user];
         NFTMetaData memory dataNft = nftData[idToken];
 
         return dataNft;
     }
 
-    // Función para cambiar la tarifa de seguro
+    /**
+     * @dev Permite al propietario del contrato cambiar la tarifa de seguro.
+     * @param _newFee La nueva tarifa de seguro a establecer.
+     */
+
     function setInsuranceFee(uint256 _newFee) external onlyOwner {
         insuranceFee = _newFee;
     }
