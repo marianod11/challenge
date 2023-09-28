@@ -18,7 +18,7 @@ contract Challenge is Ownable {
     uint256 public insuranceFee;
     uint256 public claimFee = 200;
 
-    address public treasury;
+    address public tresury;
     address public governor;
 
     PolicyNFT public policyNFTContract;
@@ -56,7 +56,7 @@ contract Challenge is Ownable {
         address _usdcToken,
         address _addressProvider,
         address _IUiPoolDataProviderV3,
-        address _treasury,
+        address _tresury,
         address _policyNFTContract,
         uint256 _insuranceFee //   address _governor,
     ) {
@@ -64,7 +64,7 @@ contract Challenge is Ownable {
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressProvider);
         POOL = IPool(ADDRESSES_PROVIDER.getPool());
         POOLDATAUSER = IUiPoolDataProviderV3(_IUiPoolDataProviderV3);
-        treasury = _treasury;
+        tresury = _tresury;
         policyNFTContract = PolicyNFT(_policyNFTContract);
         insuranceFee = _insuranceFee;
         // governor = _governor;
@@ -127,8 +127,9 @@ contract Challenge is Ownable {
 
         ) = _getUserData(_user);
 
-        uint256 HF = (totalCollateralBase * currentLiquidationThreshold) /
-            totalDebtBase;
+        uint256 HF = (totalCollateralBase.mul(currentLiquidationThreshold)).div(
+            totalDebtBase
+        );
 
         return HF.div(1e18);
     }
@@ -159,7 +160,7 @@ contract Challenge is Ownable {
         uint256 pricePolicy = (totalCollateralBase.div(100)).div(4);
 
         usdcToken.transferFrom(_user, address(this), pricePolicy);
-        usdcToken.transferFrom(_user, treasury, insuranceFee);
+        usdcToken.transferFrom(_user, tresury, insuranceFee);
 
         uint256 tokenId = policyNFTContract.safeMint(_user);
 
@@ -181,12 +182,27 @@ contract Challenge is Ownable {
      * @param _user The user's address.
      */
     function claimInsurance(address _user) external {
-        // como saber si el usuario esta liquidado
+        uint healthFactor = _getHealthFactor(_user);
+        require(healthFactor < 1, "Position not  liquidate");
+
+        (
+            uint256 totalCollateralBase,
+            uint256 totalDebtBase,
+            uint256 availableBorrowsBase,
+            ,
+            ,
+
+        ) = _getUserData(_user);
 
         uint idToken = idOwner[_user];
+        NFTMetaData memory dataNft = nftData[idToken];
+
+        require(
+            totalCollateralBase != dataNft.totalCollateral,
+            "User not liquidate"
+        );
 
         policyNFTContract.burn(idToken, _user);
-        NFTMetaData memory dataNft = nftData[idToken];
         uint256 total = dataNft.totalInsured;
         uint256 percentage2 = (total.mul(claimFee)).div(10000);
         uint256 percentage98 = total - percentage2;
@@ -194,7 +210,7 @@ contract Challenge is Ownable {
         usdcToken.approve(address(this), total);
         usdcToken.transferFrom(address(this), _user, percentage98);
 
-        usdcToken.transferFrom(address(this), treasury, percentage2);
+        usdcToken.transferFrom(address(this), tresury, percentage2);
         isSecured[_user] = false;
 
         delete nftData[idToken];
@@ -216,8 +232,8 @@ contract Challenge is Ownable {
     }
 
     /**
-     * @dev Allows the contract owner to change the insurance fee.
-     * @param _newFee The new insurance fee to set.
+     * @dev Permite al propietario del contrato cambiar la tarifa de seguro.
+     * @param _newFee La nueva tarifa de seguro a establecer.
      */
 
     function setInsuranceFee(uint256 _newFee) external onlyOwner {

@@ -46,3 +46,15 @@ The main functions of the contract are described below:
 - `allUserPositions(address _user)`: returns all user positions.
 
 - `buyInsurance(address _user)`: Allows a user to purchase an insurance policy if they meet certain requirements, such as having taken out a loan and having a health factor greater than 1. The insurance policy prices depend on the healthFactor, varying in two prices, it is transferred to the contract and the treasury. Then it is minted, and the information is stored in the NFT data.
+
+### Personal rating
+
+I hope that I was able to meet most of the requirements, my idea was to make a contact, which allows the purchase of insurance policies for users who have already carried out an action of requesting a loan in the aave protocol, since it is there Where their liquidity is at risk, I put security so that only these can buy.
+After collecting the policy, I am never quite sure how a user will find out that they have been liquidated, without going outside the blockchain. I put some verification so that it can be done.
+As for the tests, sometimes the aave environment has a flaw, mostly in the issue of requesting loans, but the idea works.
+
+I hope you like the work and we can get to another interview so you can better explain what I wanted to do in this challenge.
+
+Greetings.
+
+Mariano Dell Aquila
