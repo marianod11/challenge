@@ -1,81 +1,48 @@
-# Documentación Técnica del Challenge
+# Challenge Technical Documentation
 
-## Introducción
+## Introduction
 
-El proyecto cuenta con una serie de contratos necesarios para pode permitir a los usuarios a comprar pólizas de seguro en forma de NFT y reclamarlas en caso de que sus posiciones en el protocolo Aave sean liquidadas. A continuación, se presenta una documentación técnica que describe las principales características .
+The project includes a series of contracts necessary to allow users to purchase insurance policies in the form of NFTs and claim them in case their positions in the Aave protocol are liquidated. Below is technical documentation describing the main features.
 
-## Arquitectura
+## Architecture
 
-El proyecto cuenta, con los contratos:
+The project includes:
 
-- **Interfaces** : carpeta donde se guardan las interfaces necesarias para el funcionamiento.
-- **Challenge.sol**: tiene la logica de compra de polizas, el reclamo de polizas, y para visualizar la informacion de sus posiciones, y nft.
-- **GovernorPolicy.sol**: contrato Governable del proyecto.
-- **MarketInteractions.sol**: contrato que lo use para simular un ambiente del protocolo Aave.
-- **PolicyNFT.sol**: Contrato NFT que representas las polizas, esta soul-bound, y cumple los requisitos de Open-sea.
-- **USDCToken**: token USDC fake.
+- **Interfaces**: a folder where the necessary interfaces for operation are stored.
+- **Challenge.sol**: contains the logic for purchasing policies, claiming policies, and viewing user position and NFT information.
+- **GovernorPolicy.sol**: Governable contract of the project.
+- **MarketInteractions.sol**: a contract used to simulate an environment of the Aave protocol.
+- **PolicyNFT.sol**: NFT contract representing policies, it is soul-bound, and complies with OpenSea requirements.
+- **USDCToken**: fake USDC token.
 
-## Estructura del Contrato Challenge
+## Challenge Contract Structure
 
-El contrato "Challenge" está estructurado de la siguiente manera:
+The "Challenge" contract is structured as follows:
 
-- Utiliza contratos importados de OpenZeppelin
+- It uses contracts imported from OpenZeppelin:
 
   - `@openzeppelin/contracts/token/ERC20/IERC20.sol`
   - `@openzeppelin/contracts/token/ERC721/ERC721.sol`
   - `@openzeppelin/contracts/access/Ownable.sol`
   - `@openzeppelin/contracts/utils/math/SafeMath.sol`
 
-- Define variables de estado importantes como
+- Defines important state variables such as:
 
-  - **usdcToken**: address contracto USDC fake.
-  - **insuranceFee**: fee para la compro de polizas.
-  - **claimFee**: porcetaje de fee para el cliam.
-  - **tresury**: address a donde van los fee.
-  - **governor**: address governor.
+  - **usdcToken**: address of the fake USDC contract.
+  - **insuranceFee**: fee for purchasing policies.
+  - **claimFee**: percentage of fee for the claim.
+  - **treasury**: address where fees go.
+  - **governor**: governor's address.
 
-- Tiene las variables de entorno relacionas al protocolo Aave.
-- Tiene una estructura de datos `NFTMetaData` para almacenar metadatos relacionados con las pólizas de seguro.
-- Define mapeos para rastrear información de los propietarios de tokens y si están asegurados.
-- Implementa funciones públicas para la compra y reclamo de pólizas de seguro, así como para obtener información sobre la posición del usuario y cambiar la tarifa de seguro.
+- It has environment variables related to the Aave protocol.
+- It has a data structure `NFTMetaData` to store metadata related to insurance policies.
+- Defines mappings to track information about token owners and whether they are insured.
+- Implements public functions for purchasing and claiming insurance policies, as well as getting user position information and changing the insurance fee.
 
-## Funciones Principales
+## Main Functions
 
-A continuación, se describen las principales funciones del contrato:
+The main functions of the contract are described below:
 
-- `allUserPositions(address _user)`: devuelve todas las posiciones del usuario .
+- `allUserPositions(address _user)`: returns all user positions.
 
-- `buyInsurance(address _user)`: Permite a un usuario comprar una póliza de seguro si cumple con ciertos requisitos, como haber pedido algun préstamo y tener un factor de salud mayor a 1. Los precios de la poliza de seguro es dependiendo el healthFactor, variando en dos precios, se tranfiere al contrato y al tesoreria. Luego se mintea y se guarda la informacion en la data del NFT.
-
-- `claimInsurance(address _user)`: Permite a un usuario reclamar una póliza de seguro si su posición es liquidada.Se burnea el Nft. Se transfieren fondos al usuario y a la tesoreria. Y si elimina toda la data del NFT.
-
-- `function _getUserData(address _user)`: funcion para obtener las reservas del usuario.
-
-- `function _getHealthFactor(address _user)`: function para calcular el HealthFactor del usuario.
-
-- `getDataNft(address _user)`: Devuelve los metadatos asociados con la póliza de seguro de un usuario.
-
-- `setInsuranceFee(uint256 _newFee)`: Permite al propietario del contrato cambiar la tarifa de seguro.
-
-## Estructura del Contrato NFT (PolicyNFT)
-
-El contrato "PolicyNFT" se estructura de la siguiente manera:
-
-- Utiliza la biblioteca `Counters` para gestionar contadores de tokens.
-- Implementa el estándar ERC-721 para la creación y gestión de NFT.
-- Hereda la funcionalidad del contrato "Ownable" de OpenZeppelin, lo que permite establecer un propietario del contrato.
-- Las funciones `_beforeTokenTransfer()` y `_afterTokenTransfer()` estan modificados para que NFT quede soul-bound .
-
-## USO
-
-#### Get Started
-
-Instalar OpenZeppelin
-
-- `forge install Openzeppelin/openzeppelin-contracts`
-
-En la carpeta test, estan realizados casos, donde se simula un ambiente y asi poder probar las funcionabilidades.
-
-Comando para correr los test en un fork de arbitrum:
-
-- `forge test --fork-url https://arbitrum-mainnet.infura.io/v3/90b9c25b2643401bbc837156b08c7e8`
+- `buyInsurance(address _user)`: Allows a user to purchase an insurance policy if they meet certain requirements, such as having taken out a loan and having a health factor greater than 1. The insurance policy prices depend on the healthFactor, varying in two prices, it is transferred to the contract and the treasury. Then it is minted, and the information is stored in the NFT data.

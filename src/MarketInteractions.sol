@@ -34,7 +34,10 @@ contract MarketInteractions {
     }
 
     function borrowWETH(uint256 amount, address _dai, address _user) external {
-        POOL.borrow(_dai, amount, 2, 0, _user);
+        IERC20 aWethToken = IERC20(0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8);
+
+        aWethToken.approve(address(POOL), amount);
+        POOL.borrow(_dai, amount, 1, 0, _user);
     }
 
     receive() external payable {}

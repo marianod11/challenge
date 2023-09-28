@@ -18,7 +18,7 @@ contract Challenge is Ownable {
     uint256 public insuranceFee;
     uint256 public claimFee = 200;
 
-    address public tresury;
+    address public treasury;
     address public governor;
 
     PolicyNFT public policyNFTContract;
@@ -44,19 +44,19 @@ contract Challenge is Ownable {
     event Revoke(address indexed to, uint256 indexed tokenId);
 
     /**
-     * @dev Constructor del contrato Challenge
-     * @param _usdcToken Dirección del contrato del token USDC
-     * @param _addressProvider Dirección del proveedor de direcciones del mercado
-     * @param _IUiPoolDataProviderV3 Dirección del contrato de datos del usuario del pool
-     * @param _tresury Dirección de la tesorería
-     * @param _policyNFTContract Dirección del contrato de tokens no fungibles de pólizas
-     * @param _insuranceFee Tarifa de seguro inicial
+     * @dev Constructor of the Challenge contract
+     * @param _usdcToken Address of the USDC token contract
+     * @param _addressProvider Address of the market's address provider
+     * @param _IUiPoolDataProviderV3 Address of the user pool data contract
+     * @param _treasury Treasury address
+     * @param _policyNFTContract Address of the non-fungible policy token contract
+     * @param _insuranceFee Initial insurance fee
      */
     constructor(
         address _usdcToken,
         address _addressProvider,
         address _IUiPoolDataProviderV3,
-        address _tresury,
+        address _treasury,
         address _policyNFTContract,
         uint256 _insuranceFee //   address _governor,
     ) {
@@ -64,15 +64,15 @@ contract Challenge is Ownable {
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressProvider);
         POOL = IPool(ADDRESSES_PROVIDER.getPool());
         POOLDATAUSER = IUiPoolDataProviderV3(_IUiPoolDataProviderV3);
-        tresury = _tresury;
+        treasury = _treasury;
         policyNFTContract = PolicyNFT(_policyNFTContract);
         insuranceFee = _insuranceFee;
         // governor = _governor;
     }
 
     /**
-     * @dev Devuelve la información de todas las posiciones del usuario .
-     * @param _user La dirección del usuarios.
+     * @dev Returns information about all user positions.
+     * @param _user The user's address.
      * @return UserReserveData.
      */
     function allUserPositions(
@@ -86,15 +86,15 @@ contract Challenge is Ownable {
     }
 
     /**
-    * @dev Obtiene los datos de estado de las reservas del usuario.
-    * @param _user La dirección del usuario .
-    * @return totalCollateralBase Total de colateral depositado por el usuario.
-    * @return totalDebtBase Total de deuda del usuario.
-    * @return availableBorrowsBase Límite de préstamo disponible para el usuario.
-    * @return currentLiquidationThreshold Umbral actual de liquidación del usuario.
-    * @return ltv Relación préstamo-valor (LTV) del usuario.
-    * @return healthFactor Factor de salud financiera del usuario.
-    */
+     * @dev Retrieves user reserve state data.
+     * @param _user The user's address.
+     * @return totalCollateralBase Total collateral deposited by the user.
+     * @return totalDebtBase Total debt of the user.
+     * @return availableBorrowsBase Available borrowing limit for the user.
+     * @return currentLiquidationThreshold Current liquidation threshold of the user.
+     * @return ltv Loan-to-Value (LTV) ratio of the user.
+     * @return healthFactor User's financial health factor.
+     */
     function _getUserData(
         address _user
     )
@@ -113,9 +113,9 @@ contract Challenge is Ownable {
     }
 
     /**
-     * @dev Obtiene el Health Factor de un usuario.
-     * @param _user La dirección del usuario .
-     * @return El Health Factor del usuario.
+     * @dev Gets the Health Factor of a user.
+     * @param _user The user's address.
+     * @return The user's Health Factor.
      */
     function _getHealthFactor(address _user) internal view returns (uint256) {
         (
@@ -134,8 +134,8 @@ contract Challenge is Ownable {
     }
 
     /**
-     * @dev Permite a un usuario comprar una póliza .
-     * @param _user La dirección del usuario.
+     * @dev Allows a user to purchase an insurance policy.
+     * @param _user The user's address.
      */
     function buyInsurance(address _user) external {
         (
@@ -159,14 +159,13 @@ contract Challenge is Ownable {
         uint256 pricePolicy = (totalCollateralBase.div(100)).div(4);
 
         usdcToken.transferFrom(_user, address(this), pricePolicy);
-        usdcToken.transferFrom(_user, tresury, insuranceFee);
+        usdcToken.transferFrom(_user, treasury, insuranceFee);
 
         uint256 tokenId = policyNFTContract.safeMint(_user);
 
         idOwner[_user] = tokenId;
         isSecured[_user] = true;
 
-  
         nftData[tokenId] = NFTMetaData({
             totalCollateral: totalCollateralBase,
             totalBorrowed: totalDebtBase,
@@ -178,8 +177,8 @@ contract Challenge is Ownable {
     }
 
     /**
-     * @dev Permite a un usuario reclamar el pago de la póliza de seguro si su posición se liquida.
-     * @param _user La dirección del usuario .
+     * @dev Allows a user to claim insurance policy payout if their position is liquidated.
+     * @param _user The user's address.
      */
     function claimInsurance(address _user) external {
         // como saber si el usuario esta liquidado
@@ -195,7 +194,7 @@ contract Challenge is Ownable {
         usdcToken.approve(address(this), total);
         usdcToken.transferFrom(address(this), _user, percentage98);
 
-        usdcToken.transferFrom(address(this), tresury, percentage2);
+        usdcToken.transferFrom(address(this), treasury, percentage2);
         isSecured[_user] = false;
 
         delete nftData[idToken];
@@ -203,9 +202,9 @@ contract Challenge is Ownable {
     }
 
     /**
-     * @dev Obtiene los datos de una póliza de seguro asociada a un usuario.
-     * @param _user La dirección del usuario para consultar los datos de su póliza.
-     * @return  NFTMetaData.
+     * @dev Retrieves data for an insurance policy associated with a user.
+     * @param _user The user's address to query policy data.
+     * @return NFTMetaData.
      */
     function getDataNft(
         address _user
@@ -217,8 +216,8 @@ contract Challenge is Ownable {
     }
 
     /**
-     * @dev Permite al propietario del contrato cambiar la tarifa de seguro.
-     * @param _newFee La nueva tarifa de seguro a establecer.
+     * @dev Allows the contract owner to change the insurance fee.
+     * @param _newFee The new insurance fee to set.
      */
 
     function setInsuranceFee(uint256 _newFee) external onlyOwner {

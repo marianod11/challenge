@@ -2,6 +2,16 @@
 pragma solidity ^0.8.0;
 
 interface IPool {
+    event LiquidationCall(
+        address indexed collateralAsset,
+        address indexed debtAsset,
+        address indexed user,
+        uint256 debtToCover,
+        uint256 liquidatedCollateralAmount,
+        address liquidator,
+        bool receiveAToken
+    );
+
     function getUserAccountData(
         address user
     )
