@@ -58,7 +58,7 @@ contract Challenge is Ownable {
         address _IUiPoolDataProviderV3,
         address _tresury,
         address _policyNFTContract,
-        uint256 _insuranceFee //   address _governor,
+        uint256 _insuranceFee 
     ) {
         usdcToken = IERC20(_usdcToken);
         ADDRESSES_PROVIDER = IPoolAddressesProvider(_addressProvider);
@@ -67,7 +67,7 @@ contract Challenge is Ownable {
         tresury = _tresury;
         policyNFTContract = PolicyNFT(_policyNFTContract);
         insuranceFee = _insuranceFee;
-        // governor = _governor;
+       
     }
 
     /**
