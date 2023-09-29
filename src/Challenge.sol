@@ -131,7 +131,7 @@ contract Challenge is Ownable {
             totalDebtBase
         );
 
-        return HF.div(1e18);
+        return HF.div(1e8);
     }
 
     /**
