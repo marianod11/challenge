@@ -47,6 +47,8 @@ The main functions of the contract are described below:
 
 - `buyInsurance(address _user)`: Allows a user to purchase an insurance policy if they meet certain requirements, such as having taken out a loan and having a health factor greater than 1. The insurance policy prices depend on the healthFactor, varying in two prices, it is transferred to the contract and the treasury. Then it is minted, and the information is stored in the NFT data.
 
+- `claimInsurance(address _user)`: First check that the user has the HF < 1, then that the totalCollateralBase is different. The NFT is then burned, the insurance is transferred to the user and the fee to the treasury. Finally, all data is removed from the NFT metadata.
+
 ### Personal rating
 
 I hope that I was able to meet most of the requirements, my idea was to make a contact, which allows the purchase of insurance policies for users who have already carried out an action of requesting a loan in the aave protocol, since it is there Where their liquidity is at risk, I put security so that only these can buy.
