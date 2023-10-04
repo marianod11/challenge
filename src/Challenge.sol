@@ -150,15 +150,22 @@ contract Challenge is Ownable {
 
         require(totalDebtBase > 0, "You haven't borrowed");
 
-        uint healthFactor = _getHealthFactor(_user);
+        uint256 healthFactor = _getHealthFactor(_user);
 
         require(!isSecured[_user], "You are already insured");
         require(healthFactor > 1, "Position to liquidate");
 
         uint256 totalInsured = (totalCollateralBase.div(100)).div(2);
+    
+        uint256 pricePolicy;         
 
-        uint256 pricePolicy = (totalCollateralBase.div(100)).div(4);
+        if(healthFactor > 2){
+            pricePolicy = 10000e6;
+        }else{
+            pricePolicy = 5000e6;
+        }
 
+        
         usdcToken.transferFrom(_user, address(this), pricePolicy);
         usdcToken.transferFrom(_user, treasury, insuranceFee);
 
@@ -187,8 +194,8 @@ contract Challenge is Ownable {
 
         (
             uint256 totalCollateralBase,
-            uint256 totalDebtBase,
-            uint256 availableBorrowsBase,
+            ,
+            ,
             ,
             ,
 
