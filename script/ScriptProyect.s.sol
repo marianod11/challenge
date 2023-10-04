@@ -33,7 +33,7 @@ contract ScriptChallenge is Script {
         console.log(address(usdcToken));
 
         PolicyNFT policyNFT = new PolicyNFT("http://ipfs/");
-        console.log(address(PolicyNFT));
+
 
         Challenge challenge = new Challenge(
             address(usdcToken),

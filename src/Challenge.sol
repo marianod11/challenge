@@ -56,7 +56,7 @@ contract Challenge is Ownable {
         address _usdcToken,
         address _addressProvider,
         address _IUiPoolDataProviderV3,
-        address _tresury,
+        address _treasury,
         address _policyNFTContract,
         uint256 _insuranceFee 
     ) {
@@ -131,7 +131,7 @@ contract Challenge is Ownable {
             totalDebtBase
         );
 
-        return HF.div(1e8);
+        return HF;
     }
 
     /**
